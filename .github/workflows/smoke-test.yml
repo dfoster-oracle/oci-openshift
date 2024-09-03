@@ -1,28 +1,31 @@
 name: Infrastructure Smoke Test
 on:
-  workflow_dispatch: {}
-  # pull_request:
-  #     branches:
-  #       - 'main'
-  #     paths:
-  #       - 'infrastructure/**'
+  push:
+  schedule:
+    - cron: "20 5 * * *"
 jobs:
-  smoke-test:
+  smoke-test-vm:
     runs-on: ubuntu-latest
-    name: Create and teardown cluster infrastructure
+    name: Create VM cluster infrastructure
     env:
       OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
       OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
       OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
       OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
       OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
-      CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+      CLUSTER_NAME: smoke-test-vm
       OPENSHIFT_IMAGE_SOURCE_URI: ${{ secrets.OPENSHIFT_IMAGE_SOURCE_URI }}
       COMPARTMENT_OCID: ${{ secrets.COMPARTMENT_OCID }}
       ZONE_DNS: ${{ secrets.ZONE_DNS }}
+      ZONE_DNS_SUFFIX: .dfosterdev.com
+    outputs:
+      stack_id: ${{ steps.output-stack-id.outputs.stack_id }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      - name: Set NOW env variable
+        run: echo "NOW=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
 
       - name: Create Terraform ZIP
         run: |
@@ -32,8 +35,14 @@ jobs:
         uses: oracle-actions/run-oci-cli-command@v1.3.1
         id: create-stack
         with:
-          command: 'resource-manager stack create --compartment-id ${{ env.COMPARTMENT_OCID }} --config-source infrastructure.zip --variables "{\"compartment_ocid\": \"${{ env.COMPARTMENT_OCID }}\", \"cluster_name\": \"${{ env.CLUSTER_NAME }}\", \"openshift_image_source_uri\": \"${{ env.OPENSHIFT_IMAGE_SOURCE_URI }}\", \"region\": \"${{ env.OCI_CLI_REGION }}\", \"tenancy_ocid\": \"${{ env.OCI_CLI_TENANCY }}\", \"zone_dns\": \"${{ env.ZONE_DNS }}\"}"'
+          command: 'resource-manager stack create --compartment-id ${{ env.COMPARTMENT_OCID }} --display-name ${{ github.job }}-${{ env.NOW }} --config-source infrastructure.zip --variables "{\"compartment_ocid\": \"${{ env.COMPARTMENT_OCID }}\", \"cluster_name\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}\", \"openshift_image_source_uri\": \"${{ env.OPENSHIFT_IMAGE_SOURCE_URI }}\", \"region\": \"${{ env.OCI_CLI_REGION }}\", \"tenancy_ocid\": \"${{ env.OCI_CLI_TENANCY }}\", \"zone_dns\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}${{ env.ZONE_DNS_SUFFIX }}\"}"'
           query: 'data.id'
+          silent : false
+      
+      - name: Output Stack ID
+        id: output-stack-id
+        run: echo "stack_id=${{ steps.create-stack.outputs.raw_output }}" >> $GITHUB_OUTPUT
+
 
       - name: RMS Stack Plan Job
         uses: oracle-actions/run-oci-cli-command@v1.3.1
@@ -58,4 +67,93 @@ jobs:
       #   id: destroy-stack
       #   with:
       #     command: 'resource-manager stack destroy --stack-id ${{ steps.create-stack.outputs.raw_output }}'
+  smoke-test-bm:
+    runs-on: ubuntu-latest
+    name: Create BM cluster infrastructure
+    env:
+      OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+      OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+      OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+      OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+      OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+      CLUSTER_NAME: smoke-test-bm
+      OPENSHIFT_IMAGE_SOURCE_URI: ${{ secrets.OPENSHIFT_IMAGE_SOURCE_URI }}
+      COMPARTMENT_OCID: ${{ secrets.COMPARTMENT_OCID }}
+      ZONE_DNS: ${{ secrets.ZONE_DNS }}
+      ZONE_DNS_SUFFIX: .dfosterdev.com
+    outputs:
+      stack_id: ${{ steps.output-stack-id.outputs.stack_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set NOW env variable
+        run: echo "NOW=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_ENV
 
+      - name: Create Terraform ZIP
+        run: |
+          zip -j infrastructure.zip infrastructure/data.tf infrastructure/locals.tf infrastructure/main.tf infrastructure/output.tf infrastructure/schema.yaml infrastructure/variables.tf
+
+      - name: Create RMS Stack
+        uses: oracle-actions/run-oci-cli-command@v1.3.1
+        id: create-stack
+        with:
+          command: 'resource-manager stack create --compartment-id ${{ env.COMPARTMENT_OCID }} --display-name ${{ github.job }}-${{ env.NOW }} --config-source infrastructure.zip --variables "{\"compartment_ocid\": \"${{ env.COMPARTMENT_OCID }}\", \"cluster_name\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}\", \"control_plane_shape\": \"BM.Standard3.64\", \"control_plane_ocpu\": \"64\", \"control_plane_memory\": \"1024\", \"compute_shape\": \"BM.Standard3.64\", \"compute_ocpu\": \"64\", \"compute_memory\": \"1024\", \"openshift_image_source_uri\": \"${{ env.OPENSHIFT_IMAGE_SOURCE_URI }}\", \"region\": \"${{ env.OCI_CLI_REGION }}\", \"tenancy_ocid\": \"${{ env.OCI_CLI_TENANCY }}\", \"zone_dns\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}${{ env.ZONE_DNS_SUFFIX }}\"}"'
+          query: 'data.id'
+          silent : false
+
+      - name: Output Stack ID
+        id: output-stack-id
+        run: echo "stack_id=${{ steps.create-stack.outputs.raw_output }}" >> $GITHUB_OUTPUT
+
+      - name: RMS Stack Plan Job
+        uses: oracle-actions/run-oci-cli-command@v1.3.1
+        id: stack-plan-job
+        with:
+          command: 'resource-manager job create-plan-job --wait-for-state SUCCEEDED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
+          silent : false
+
+      - name: RMS Stack Apply Job
+        uses: oracle-actions/run-oci-cli-command@v1.3.1
+        id: stack-apply-job
+        with:
+          command: 'resource-manager job create-apply-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
+          silent : false
+
+      - name: RMS Stack Destroy Job
+        uses: oracle-actions/run-oci-cli-command@v1.3.1
+        id: stack-destroy-job
+        with:
+          command: 'resource-manager job create-destroy-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
+          silent : false
+
+      # - name: Destroy RMS Stack
+      #   uses: oracle-actions/run-oci-cli-command@v1.3.1
+      #   id: destroy-stack
+      #   with:
+      #     command: 'resource-manager stack destroy --stack-id ${{ steps.create-stack.outputs.raw_output }}'
+  # teardown-stacks:
+  #   if : ${{ always() }}
+  #   needs: [smoke-test-vm, smoke-test-bm]
+  #   runs-on: ubuntu-latest
+  #   name: Teardown cluster infrastructure
+  #   env:
+  #     OCI_CLI_USER: ${{ secrets.OCI_CLI_USER }}
+  #     OCI_CLI_TENANCY: ${{ secrets.OCI_CLI_TENANCY }}
+  #     OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
+  #     OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
+  #     OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
+  #     COMPARTMENT_OCID: ${{ secrets.COMPARTMENT_OCID }}
+  #   steps:
+  #     - name: Teardown VM Stack
+  #       uses: oracle-actions/run-oci-cli-command@v1.3.1
+  #       id: teardown-vm-stack
+  #       with:
+  #         command: 'resource-manager job create-destroy-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ needs.smoke-test-vm.outputs.stack_id }}'
+  #         silent : false
+  #     - name: Teardown BM Stack
+  #       uses: oracle-actions/run-oci-cli-command@v1.3.1
+  #       id: teardown-bm-stack
+  #       with:
+  #         command: 'resource-manager job create-destroy-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ needs.smoke-test-bm.outputs.stack_id }}'
+  #         silent : false
