@@ -41,7 +41,6 @@ jobs:
         id: output-stack-id
         run: echo "stack_id=${{ steps.create-stack.outputs.raw_output }}" >> $GITHUB_OUTPUT
 
-
       - name: RMS Stack Plan Job
         uses: oracle-actions/run-oci-cli-command@v1.3.1
         id: stack-plan-job
