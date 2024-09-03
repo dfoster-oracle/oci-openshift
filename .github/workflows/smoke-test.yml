@@ -36,7 +36,6 @@ jobs:
         with:
           command: 'resource-manager stack create --compartment-id ${{ env.COMPARTMENT_OCID }} --display-name ${{ github.job }}-${{ env.NOW }} --config-source infrastructure.zip --variables "{\"compartment_ocid\": \"${{ env.COMPARTMENT_OCID }}\", \"cluster_name\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}\", \"openshift_image_source_uri\": \"${{ env.OPENSHIFT_IMAGE_SOURCE_URI }}\", \"region\": \"${{ env.OCI_CLI_REGION }}\", \"tenancy_ocid\": \"${{ env.OCI_CLI_TENANCY }}\", \"zone_dns\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}${{ env.ZONE_DNS_SUFFIX }}\"}"'
           query: 'data.id'
-          silent : false
       
       - name: Output Stack ID
         id: output-stack-id
@@ -99,7 +98,6 @@ jobs:
         with:
           command: 'resource-manager stack create --compartment-id ${{ env.COMPARTMENT_OCID }} --display-name ${{ github.job }}-${{ env.NOW }} --config-source infrastructure.zip --variables "{\"compartment_ocid\": \"${{ env.COMPARTMENT_OCID }}\", \"cluster_name\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}\", \"control_plane_shape\": \"BM.Standard3.64\", \"control_plane_ocpu\": \"64\", \"control_plane_memory\": \"1024\", \"compute_shape\": \"BM.Standard3.64\", \"compute_ocpu\": \"64\", \"compute_memory\": \"1024\", \"openshift_image_source_uri\": \"${{ env.OPENSHIFT_IMAGE_SOURCE_URI }}\", \"region\": \"${{ env.OCI_CLI_REGION }}\", \"tenancy_ocid\": \"${{ env.OCI_CLI_TENANCY }}\", \"zone_dns\": \"${{ env.CLUSTER_NAME }}-${{ env.NOW }}${{ env.ZONE_DNS_SUFFIX }}\"}"'
           query: 'data.id'
-          silent : false
 
       - name: Output Stack ID
         id: output-stack-id
@@ -110,21 +108,18 @@ jobs:
         id: stack-plan-job
         with:
           command: 'resource-manager job create-plan-job --wait-for-state SUCCEEDED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
-          silent : false
 
       - name: RMS Stack Apply Job
         uses: oracle-actions/run-oci-cli-command@v1.3.1
         id: stack-apply-job
         with:
           command: 'resource-manager job create-apply-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
-          silent : false
 
       - name: RMS Stack Destroy Job
         uses: oracle-actions/run-oci-cli-command@v1.3.1
         id: stack-destroy-job
         with:
           command: 'resource-manager job create-destroy-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
-          silent : false
 
       # - name: Destroy RMS Stack
       #   uses: oracle-actions/run-oci-cli-command@v1.3.1
