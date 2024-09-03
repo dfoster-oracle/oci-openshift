@@ -1,6 +1,5 @@
 name: Infrastructure Smoke Test
 on:
-  push:
   schedule:
     - cron: "20 5 * * *"
 jobs:
