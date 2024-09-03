@@ -1,5 +1,6 @@
 name: Infrastructure Change Test
 on:
+  push:
   pull_request:
       branches:
         - 'main'
@@ -15,11 +16,10 @@ jobs:
       OCI_CLI_FINGERPRINT: ${{ secrets.OCI_CLI_FINGERPRINT }}
       OCI_CLI_KEY_CONTENT: ${{ secrets.OCI_CLI_KEY_CONTENT }}
       OCI_CLI_REGION: ${{ secrets.OCI_CLI_REGION }}
-      CLUSTER_NAME: change-test
       OPENSHIFT_IMAGE_SOURCE_URI: ${{ secrets.OPENSHIFT_IMAGE_SOURCE_URI }}
       COMPARTMENT_OCID: ${{ secrets.COMPARTMENT_OCID }}
-      ZONE_DNS: ${{ secrets.ZONE_DNS }}
-      ZONE_DNS_SUFFIX: .dfosterdev.com
+      ZONE_DNS_SUFFIX: ${{ secrets.ZONE_DNS_SUFFIX }}
+      CLUSTER_NAME: change-test
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -29,7 +29,14 @@ jobs:
 
       - name: Create Terraform ZIP
         run: |
-          zip -j infrastructure.zip infrastructure/data.tf infrastructure/locals.tf infrastructure/main.tf infrastructure/output.tf infrastructure/schema.yaml infrastructure/variables.tf
+          if [ -f infrastructure.tf ]; then
+            zip infrastructure.zip infrastructure.tf
+          elif [ -d infrastructure ]; then
+            zip -j infrastructure.zip infrastructure/data.tf infrastructure/locals.tf infrastructure/main.tf infrastructure/output.tf infrastructure/schema.yaml infrastructure/variables.tf
+          else
+            echo "Could not find infrastructure.tf or infrastructure directory"
+            exit 1
+          fi
 
       - name: Create RMS Stack
         uses: oracle-actions/run-oci-cli-command@v1.3.1
@@ -56,8 +63,8 @@ jobs:
         with:
           command: 'resource-manager job create-destroy-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
 
-      # - name: Destroy RMS Stack
-      #   uses: oracle-actions/run-oci-cli-command@v1.3.1
-      #   id: destroy-stack
-      #   with:
-      #     command: 'resource-manager stack destroy --stack-id ${{ steps.create-stack.outputs.raw_output }}'
+      - name: Destroy RMS Stack
+        uses: oracle-actions/run-oci-cli-command@v1.3.1
+        id: destroy-stack
+        with:
+          command: 'resource-manager stack destroy --stack-id ${{ steps.create-stack.outputs.raw_output }}'
