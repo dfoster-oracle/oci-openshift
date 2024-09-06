@@ -3,11 +3,11 @@ terraform {
   required_providers {
     oci = {
       source  = "oracle/oci"
-      version = ">= 5.38.0"
+      version = ">= 6.9.0"
     }
     time = {
       source  = "hashicorp/time"
-      version = ">= 0.11.1"
+      version = ">= 0.12.0"
     }
   }
 }
