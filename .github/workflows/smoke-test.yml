@@ -52,7 +52,7 @@ jobs:
         id: stack-apply-job
         with:
           command: 'resource-manager job create-apply-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
-      
+
       - name: Teardown VM Infrastructure
         uses: oracle-actions/run-oci-cli-command@v1.3.1
         id: teardown-vm-infra
@@ -109,7 +109,7 @@ jobs:
         id: stack-apply-job
         with:
           command: 'resource-manager job create-apply-job --wait-for-state SUCCEEDED --max-wait-seconds 1800 --execution-plan-strategy AUTO_APPROVED --stack-id ${{ steps.create-stack.outputs.raw_output }}'
-      
+
       - name: Teardown BM Infrastructure
         uses: oracle-actions/run-oci-cli-command@v1.3.1
         id: teardown-bm-infra
